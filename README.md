@@ -859,31 +859,12 @@ Combining **limine-snapper-sync** and **limine-entry-tool** turns a FAT32 boot p
 
 Together, these features make FAT32 behave like a CoW-inspired boot filesystem.
 
----
+## Third-party code
 
-## Donate
+Some source code under `src/` is derived from and ported from [boom-boot](https://github.com/snapshotmanager/boom-boot), copyrighted 2017-now Bryn M. Reeves, and is licensed under Apache-2.0. 
 
-If you would like to support the project, feel free to donate:
+Its integration code is licensed under GPL-3.0-or-later. See [LICENSE](LICENSE) for this project's license.
 
-[<img src="https://gitlab.com/Zesko/resources/-/raw/main/kofiButton.png" width=110px>](https://ko-fi.com/zeskotron)
-&nbsp;[<img src="https://gitlab.com/Zesko/resources/-/raw/main/PayPalButton.png" width=160px/>](https://www.paypal.com/donate/?hosted_button_id=XKP36D62AY5HY)
+This project is based on [Limine-Snapper-Sync](https://gitlab.com/Zesko/limine-snapper-sync), copyrighted 2024-now Zesko, and is licensed under GPL-3.0-or-later.
 
-### Planned features
 
-- **Smaller ESP support:** moves bootable snapshot files to another, larger FAT32 partition.
-- **4th restore method:** emulates `snapper rollback` on OpenSUSE layouts and works with overlayfs on a read-only snapshot.
-- **systemd-boot support:** generates BLS files from existing snapshot entries to increase boot reliability.
-- **Auto kernel backup:** copies kernels to `/var/cache/...` on any Linux filesystem, unlocking capabilities:
-  * Repairing kernels on boot partition by restoring them from backups if corrupted or missing.
-  * Importing kernels back to the boot partition if they are accidentally wiped.
-  * Moving kernels to backup instead of deleting them when the boot partition reaches its usage limit.
-  * Keeping snapshot boot entries synced with Snapper snapshots in a 1:1 mapping thanks to "unlimited" backup capacity.
-  * Restoring a snapshot works no matter if its matching kernel is missing or corrupted on the boot partition.
-- **Mirrored boot partitions:** automatically syncs two boot partitions by updating only changed snapshots.
-- **Pinned snapshots:** always retained and not affected by the `MAX_SNAPSHOT_ENTRIES` cleanup setting.
-- **Snapper CLI-free:** triggered by Snapper events and reads snapshot metadata directly without interfering with Snapper services.
-- **Backup boot support:** allows booting from a backup on another disk under **certain conditions** using [snapper-backup-configs](https://man.archlinux.org/man/snapper-backup-configs.5) and [snbk](https://man.archlinux.org/man/snbk.8.en).
-- **Manifest integrity check:** verifies snapshots.json file using its embedded xxHash checksum.
-- **Btrfs layout changes for Snapper:** All old kernel parameters stored in the manifest will be updated automatically.
-- **Enhanced performance** by running multiple processes in parallel using optimized Kotlin code and standard libraries.
-- **Bcachefs support** is planned once Snapper supports Bcachefs: [TODOs](https://github.com/openSUSE/snapper/blob/master/doc/bcachefs.txt).
