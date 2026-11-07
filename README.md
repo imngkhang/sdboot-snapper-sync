@@ -229,11 +229,12 @@ cp -r install/arch-linux/usr/lib/snapper /usr/lib/
 cp -r install/arch-linux/usr/lib/systemd/* /etc/systemd/ # Optional for systemd
 cp install/arch-linux/etc/xdg/autostart/*.desktop /etc/xdg/autostart/` # Adjust based on ${XDG_CONFIG_DIRS}
 cp install/arch-linux/etc/*.conf /etc/
+install -Dm644 install/arch-linux/etc/default/sdboot-snapper-sync /etc/default/sdboot-snapper-sync
 for po in po/*.po; do lang="$(basename "$po" .po)"; mkdir -p "/usr/share/locale/$lang/LC_MESSAGES"; msgfmt "$po" -o "/usr/share/locale/$lang/LC_MESSAGES/limine-snapper-sync.mo"; done
 ````
 * Install `libnotify` or [dunst](https://github.com/dunst-project/dunst) for desktop notifications on X11 or Wayland.
-* Properly configure `limine.conf` to work with this tool. See [Boot Configuration](#boot-configuration) for details.
-* Test running `limine-snapper-sync`. If successful, you should see: `Updated: $ESP_PATH/limine.conf`.
+* Configure systemd-boot Type #1 entries under `$ESP_PATH/loader/entries`.
+* Test running `limine-snapper-sync`; it writes snapshot entries there in BLS format.
 
 **Tip:**<br>
 If you write your own scripts or tools that access or modify `limine.conf` or other files on the same boot partition,  
@@ -245,99 +246,30 @@ make sure to source the Bash library `/usr/lib/limine/limine-mutex` and use the 
 
 ## Boot Configuration:
 
-**Note:**<br>
-This automation generates only the default at `$ESP_PATH/limine.conf` and does not touch any other Limine config locations.
-If you plan to use `$ESP_PATH/limine.conf` as the default Limine boot config,
-remove any other alternative Limine config files to prevent them from overriding the default in the Limine boot menu.
+This version supports systemd-boot only. Keep normal Type #1 BLS entries in
+`$ESP_PATH/loader/entries`; each entry must provide `linux` (or `efi` for a UKI),
+and may provide one or more `initrd` lines and an `options` line. Entries are
+selected by `machine-id`, the machine-id filename prefix, or a title matching
+`TARGET_OS_NAME`. Snapshot entries are generated alongside them in BLS format.
 
-**Tip:**<br>
-Boot configuration is automated by some `limine-entry-tool`-based package.
-This allows you to skip the manual configuration below unless custom options are needed.
-
-<details>
-
-<summary>Manual Limine configuration</summary>
-
-Create or edit *$ESP_PATH*/limine.conf:
-
-1. **Add a kernel entry:**
-
-  You **must** add at least one kernel entry in the format `//<Kernel name>` <br>
-  within an OS entry block `/<OS name>`.
-
-2. **Choose one snapshot layout:** (Optional)
-
-  * Default: Add `//Snapshots` inside the OS entry block.
-  <br>**or**<br>
-  * Alternative: Add `/Snapshots` outside the OS entry block.
-
-The keyword (`//Snapshots` or `/Snapshots`) tells the tool where snapshot entries should be placed.
-
-#### Example 1:
-
-If bootable kernel files are stored in `/efi/`, `/boot/`, `/boot/efi/`, or any other path used as your boot partition:
-
-```
-/Arch Linux
-
-  //Kernel LTS
-  protocol: linux
-  module_path: boot():/initramfs-linux-lts.img
-  kernel_path: boot():/vmlinuz-linux-lts
-  kernel_cmdline: rw rootflags=subvol=/@ root=UUID=068589c1-d9be-407c-ad86-101aa0912825
-  
-  //Kernel
-  protocol: linux
-  module_path: boot():/initramfs-linux.img
-  kernel_path: boot():/vmlinuz-linux
-  kernel_cmdline: rw rootflags=subvol=/@ root=UUID=068589c1-d9be-407c-ad86-101aa0912825
-
-  //Snapshots
-```
-
-#### Example 2:
-
-If bootable kernel files are stored in `/efi/d647abee5e264f469d7a38b751d9d1db/kernel-version/`
-like where systemd-boot (`kernel-install`) stores them:
-
-```
-/+Arch Linux
-comment: Any comment
-comment: machine-id=d647abee5e264f469d7a38b751d9d1db
-
-  //Mainline kernel
-  protocol: linux
-  module_path: boot():/d647abee5e264f469d7a38b751d9d1db/kernel-version/initrd
-  kernel_path: boot():/d647abee5e264f469d7a38b751d9d1db/kernel-version/linux
-  kernel_cmdline: rw rootflags=subvol=/@ root=UUID=068589c1-d9be-407c-ad86-101aa0912825
-
-  //Mainline kernel fallback
-  protocol: linux
-  module_path: boot():/d647abee5e264f469d7a38b751d9d1db/kernel-version/initrd-fallback
-  kernel_path: boot():/d647abee5e264f469d7a38b751d9d1db/kernel-version/linux
-  kernel_cmdline: rw rootflags=subvol=/@ root=UUID=068589c1-d9be-407c-ad86-101aa0912825
-
-/Snapshots
-```
-**Note:** Bootable files must be placed in the boot partition alongside `limine.conf`.
-Only `boot():` or `$boot():` function is supported.
-
-</details>
+For ESP mounts at `/efi` or `/boot/efi`, the sync process calls
+`kernel-install --esp-path=<ESP> add-all` to install kernels and generate BLS
+entries. `/boot` remains the snapshot storage location when it is the configured
+boot partition.
 
 ---
 
 ## Tool Configuration
 
-The config file is located at `/etc/default/limine` (**Recommend**) or alternatively at `/etc/limine-snapper-sync.conf`
+The config file is located at `/etc/default/sdboot-snapper-sync`.
 
 **Note:**
 
-- `/etc/default/limine` takes precedence over `/etc/limine-snapper-sync.conf`.
 - When booting into a read-only snapshot where `/etc/*` cannot be configured,
-`/etc/default/limine` is automatically copied to the temporary location `/tmp/limine-snapper-sync.conf`,
+`/etc/default/sdboot-snapper-sync` is automatically copied to the temporary location `/tmp/limine-snapper-sync.conf`,
 allowing temporary configuration.
 
-Copy this to `/etc/default/limine` and adjust the settings as needed.
+Adjust the settings in `/etc/default/sdboot-snapper-sync` as needed.
 
 ```properties
 ### OS Entry Targeting

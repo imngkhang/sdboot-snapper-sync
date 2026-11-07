@@ -12,8 +12,7 @@ readonly LOG_LEVEL=3
 # Load configuration
 load_config() {
 	local config_files=(
-		/etc/limine-snapper-sync.conf
-		/etc/default/limine
+		/etc/default/sdboot-snapper-sync
 		/tmp/limine-snapper-sync.conf
 	)
 	local file key val

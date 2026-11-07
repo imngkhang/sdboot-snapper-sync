@@ -5,13 +5,13 @@ import org.limine.snapper.formats.json1.CmdlineDetail;
 import org.limine.snapper.formats.json1.ImageDetail;
 import org.limine.snapper.formats.json1.KernelEntry;
 import org.limine.snapper.formats.json1.OptionDetail;
-import org.limine.snapper.formats.limine8.Limine;
 import org.limine.snapper.objects.Config;
 import org.limine.snapper.objects.TreeNode;
 
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
 
 public class KernelReader {
 
@@ -76,62 +76,30 @@ public class KernelReader {
             clearBootConfigs.add(configLine);
             String spaces = Utility.getLeadingSpaces(configLine);
             String lowerCaseTrimLine = configLine.toLowerCase().trim();
-            String extractValue = Limine.extractValue(configLine);
+            int colon = configLine.indexOf(':');
+            String key = colon < 0 ? "" : configLine.substring(0, colon).trim().toLowerCase(Locale.ROOT);
+            String extractValue = colon < 0 ? "" : configLine.substring(colon + 1).trim();
 
             if (lowerCaseTrimLine.startsWith("#") || lowerCaseTrimLine.isBlank()) {
                 continue;
 
-            } else if (lowerCaseTrimLine.startsWith(Limine.PATH.toString())) {
-                ImageDetail imageDetail = this.convertToImageDetail(Limine.PATH.name(), spaces, lineIndex, extractValue);
+            } else if (key.equals("linux") || key.equals("efi") || key.equals("initrd")) {
+                ImageDetail imageDetail = this.convertToImageDetail(key.toUpperCase(Locale.ROOT), spaces, lineIndex, extractValue);
                 if (imageDetail == null) continue;
                 imageDetails.add(imageDetail);
-
-            } else if (lowerCaseTrimLine.startsWith(Limine.KERNEL_PATH.toString())) {
-                ImageDetail imageDetail = this.convertToImageDetail(Limine.KERNEL_PATH.name(), spaces, lineIndex, extractValue);
-                if (imageDetail == null) continue;
-                imageDetails.add(imageDetail);
-
-            } else if (lowerCaseTrimLine.startsWith(Limine.IMAGE_PATH.toString())) {
-                ImageDetail imageDetail = this.convertToImageDetail(Limine.IMAGE_PATH.name(), spaces, lineIndex, extractValue);
-                if (imageDetail == null) continue;
-                imageDetails.add(imageDetail);
-
-            } else if (lowerCaseTrimLine.startsWith(Limine.MODULE_PATH.toString())) {
-                ImageDetail imageDetail = this.convertToImageDetail(Limine.MODULE_PATH.name(), spaces, lineIndex, extractValue);
-                if (imageDetail == null) continue;
-                imageDetails.add(imageDetail);
-
-            } else if (lowerCaseTrimLine.startsWith(Limine.CMDLINE.toString())) {
+            } else if (key.equals("options")) {
                 String rootSubvolumePath = Config.ROOT_SUBVOLUME_PATH;
                 String rootSnapshotPath = Utility.buildPath(Config.ROOT_SNAPSHOTS_PATH, rootSnapshotID + "/snapshot");
                 String kernelCmdline = applyKernelParameterChanges(extractValue);
                 String snapshotCmdline = replaceSubvolPath(kernelCmdline, rootSubvolumePath, rootSnapshotPath);
-                cmdlineDetails.add(new CmdlineDetail(Limine.CMDLINE.name(), spaces, lineIndex, extractValue, snapshotCmdline, null));
-
-            } else if (lowerCaseTrimLine.startsWith(Limine.KERNEL_CMDLINE.toString())) {
-                String rootSubvolumePath = Config.ROOT_SUBVOLUME_PATH;
-                String rootSnapshotPath = Utility.buildPath(Config.ROOT_SNAPSHOTS_PATH, rootSnapshotID + "/snapshot");
-                String kernelCmdline = applyKernelParameterChanges(extractValue);
-                String snapshotCmdline = replaceSubvolPath(kernelCmdline, rootSubvolumePath, rootSnapshotPath);
-                cmdlineDetails.add(new CmdlineDetail(Limine.KERNEL_CMDLINE.name(), spaces, lineIndex, extractValue, snapshotCmdline, null));
-
-            } else if (lowerCaseTrimLine.startsWith(Limine.COMMENT.toString())) {
-                optionDetails.add(new OptionDetail(Limine.COMMENT.name(), spaces, lineIndex, extractValue, extractValue, null));
-
-            } else if (lowerCaseTrimLine.startsWith(Limine.PROTOCOL.toString())) {
-                optionDetails.add(new OptionDetail(Limine.PROTOCOL.name(), spaces, lineIndex, extractValue, extractValue, null));
-
-            } else if (lowerCaseTrimLine.startsWith(Limine.SUB_ENTRY_KEY.toString())) {
-                String errMessage = Messages.get("text.incorrect-config-some-bug-entry", configLine.trim());
-                Utility.exitWithError(errMessage);
-                return null;
+                cmdlineDetails.add(new CmdlineDetail("OPTIONS", spaces, lineIndex, extractValue, snapshotCmdline, null));
             } else {
-                optionDetails.add(new OptionDetail(Limine.extractKey(configLine), spaces, lineIndex, extractValue, extractValue, null));
+                optionDetails.add(new OptionDetail(key.toUpperCase(Locale.ROOT), spaces, lineIndex, extractValue, extractValue, null));
             }
             lineIndex++;
         }
-        if (cmdlineDetails.isEmpty() && kernelNode.nodes.isEmpty()) {
-            Utility.errorMessage(Messages.get("error.kernel-entry-has-no-kernel", kernelNode.cleanName, Utility.buildPath(config.espPath(), Config.LIMINE_CONFIG_FILE)));
+        if (imageDetails.isEmpty() && kernelNode.nodes.isEmpty()) {
+            Utility.errorMessage(Messages.get("error.kernel-entry-has-no-kernel", kernelNode.cleanName, Utility.buildPath(config.espPath(), Config.BOOT_ENTRIES_DIRECTORY)));
         }
 
         for (TreeNode subKernelNode : kernelNode.nodes) {
@@ -141,42 +109,17 @@ public class KernelReader {
         return new KernelEntry(kernelNode.cleanName, leadingSpaces, optionDetails, imageDetails, cmdlineDetails, clearBootConfigs, subKernels, null, null);
     }
 
-    private ImageDetail convertToImageDetail(String limineKey, String leadingSpaces, int lineIndex, String pathLine) {
+    private ImageDetail convertToImageDetail(String bootKey, String leadingSpaces, int lineIndex, String pathLine) {
 
-        if (imageCache.containsKey(pathLine)) {
-            return imageCache.get(pathLine);
+        String cacheKey = bootKey + ":" + pathLine;
+        if (imageCache.containsKey(cacheKey)) {
+            return imageCache.get(cacheKey);
         }
 
         Map<String, String> imageProperties = new HashMap<>();
 
-        // Define regular expressions for matching keys and extracting their values
-        Pattern pathResourceRegex = Pattern.compile(Limine.PATH_RESOURCE_PATTERN.toString());
-        Pattern hashRegex = Pattern.compile(Limine.HASH_PATTERN.toString());
-
-        Matcher pathResourceMatcher = pathResourceRegex.matcher(pathLine);
-        Matcher hashMatcher = hashRegex.matcher(pathLine);
-
-        // Variables to store the extracted keys and hash
-        String pathResource;
-        String pathValue = pathLine;
-        String blake2sum = "";
-
-        // Check for and extract the path resource.
-        if (pathResourceMatcher.find()) {
-            pathResource = pathResourceMatcher.group();
-            pathValue = pathLine.substring(pathValue.indexOf(pathResource) + pathResource.length()).trim();
-        } else {
-            Utility.errorMessage(Messages.get("error.unsupported-boot-path-limine-conf"));
-            isBootConfigValid = false;
-            imageCache.put(pathLine, null);
-            return null;
-        }
-
-        // Check for and extract the hash
-        if (hashMatcher.find()) {
-            blake2sum = hashMatcher.group();
-            pathValue = pathValue.substring(0, pathValue.indexOf(blake2sum)).trim();
-        }
+        String pathValue = pathLine.trim();
+        if (pathValue.startsWith("/")) pathValue = pathValue.substring(1);
 
         String fileName;
         String espDirPath = "";
@@ -196,7 +139,7 @@ public class KernelReader {
         String filePath = Utility.buildPath(config.espPath(), espDirPath, fileName);
         String hashSum;
         if (Utility.isFilePresent(filePath)) {
-            hashSum = Utility.calculateHash(filePath);
+            hashSum = calculateSha256(filePath);
         } else if (!Config.RESTORE_MODE) {
             Utility.errorMessage(Messages.get("error.skipping-snapshot-kernel-entry-creation"), Messages.get("error.missing-file", filePath));
             hashSum = Config.NO_FILE_NAME;
@@ -206,13 +149,27 @@ public class KernelReader {
             isBootConfigValid = false;
         }
 
-        String fileHashName = fileName + Config.HASH_FUNCTION.hashName + hashSum;
-        String snapshotPathValue = Utility.buildPath(config.machineID(), Config.HISTORY_FOLDER, fileHashName + blake2sum);
-        imageProperties.put(Limine.PATH_RESOURCE.name(), pathResource);
-        imageProperties.put(Limine.HASH.name(), blake2sum);
-        ImageDetail newImage = new ImageDetail(limineKey, leadingSpaces, lineIndex, fileName, fileHashName, espDirPath, pathValue, snapshotPathValue, imageProperties);
-        imageCache.put(pathLine, newImage);
+        // A content-addressed name makes equal kernel/initramfs payloads share one stored copy,
+        // even when their source names differ.
+        String fileHashName = "image_sha256_" + hashSum;
+        String snapshotPathValue = Utility.buildPath(config.machineID(), Config.HISTORY_FOLDER, fileHashName);
+        if (bootKey.equals("EFI")) imageProperties.put("BLS_EFI", "true");
+        ImageDetail newImage = new ImageDetail(bootKey, leadingSpaces, lineIndex, fileName, fileHashName, espDirPath, pathValue, snapshotPathValue, imageProperties);
+        imageCache.put(cacheKey, newImage);
         return newImage;
+    }
+
+    private static String calculateSha256(String path) {
+        try (var input = Files.newInputStream(Path.of(path))) {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[1024 * 1024];
+            int count;
+            while ((count = input.read(buffer)) != -1) digest.update(buffer, 0, count);
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (Exception e) {
+            Utility.errorMessage(Messages.get("error.hash-calculation-failed-no-file", path));
+            return Config.NO_FILE_NAME;
+        }
     }
 
     /**
@@ -223,19 +180,6 @@ public class KernelReader {
         if (!Config.KERNEL_PARAMETERS_TO_REPLACE.isEmpty()) {
             return kernelCmdline;
         }
-        StringBuilder keyword = new StringBuilder();
-        // Keyword adds some spaces and "kernel_cmdline:" or "cmdline:" from the kernel cmdline.
-        if (kernelCmdline.contains(Limine.KERNEL_CMDLINE.toString()) || kernelCmdline.contains(Limine.CMDLINE.toString())) {
-            for (int i = 0; i < kernelCmdline.length(); i++) {
-                char c = kernelCmdline.charAt(i);
-                keyword.append(c);
-                if (c == ':') {
-                    kernelCmdline = kernelCmdline.substring(i + 1).trim();
-                    break;
-                }
-            }
-        }
-
         String[] kernelParameters = kernelCmdline.split(" ");
         boolean isRootFlagsFound = false;
         boolean isSubvolFlagFound = false;
@@ -285,7 +229,6 @@ public class KernelReader {
         }
 
         StringBuilder cmdline = new StringBuilder();
-        cmdline.append(keyword);
         for (int i = 0; i < kernelParameters.length; i++) {
             cmdline.append(kernelParameters[i]);
             if (i < kernelParameters.length - 1) {

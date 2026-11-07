@@ -9,7 +9,7 @@ readonly SCRIPT_NAME="limine-snapper-sync"
 readonly BOOT_PARTITION_LOCK="/run/lock/boot-partition.lock"
 readonly RESTORE_LOCKFILE="/run/lock/limine-snapper-restore.lock"
 readonly BASE_CONFIG="/etc/limine-snapper-sync.conf"
-readonly DEFAULT_CONFIG="/etc/default/limine"
+readonly DEFAULT_CONFIG="/etc/default/sdboot-snapper-sync"
 export HOOK_CALLER="${HOOK_CALLER:-$SCRIPT_NAME}"
 export HOOK_CMDLINE="$*"
 

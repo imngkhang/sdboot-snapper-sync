@@ -957,7 +957,7 @@ public class Utility {
     public static PartitionUsage checkPartitionUsage(double limitUsagePercent, String mountPoint, Set<String> filePaths, Set<String> deletedFilePaths) {
         // Calculate the total size of the new files
         long newFilesSize = calculateFilesSize(filePaths, deletedFilePaths);
-        // Size of new files + 1 MiB (snapshots.json + limine.conf + 2x.old + deviation)
+        // Size of new files + 1 MiB (snapshots.json + BLS entries + deviation)
         long deltaBytes = newFilesSize + 1048576;
         return calculatePartitionUsage(limitUsagePercent, mountPoint, deltaBytes);
     }
@@ -997,8 +997,8 @@ public class Utility {
     }
 
 
-    public static String findLimineBootPartition(String limineConfigFile) {
-        String[] mounts = {"/efi", "/boot", "/boot/efi", "/limine"};
+    public static String findSystemdBootPartition() {
+        String[] mounts = {"/efi", "/boot/efi", "/boot"};
         for (String mount : mounts) {
             Path path = Path.of(mount);
             if (!Files.isDirectory(path)) {
@@ -1013,11 +1013,53 @@ public class Utility {
             if (!isVfat) {
                 continue;
             }
-            if (Files.isRegularFile(path.resolve(limineConfigFile))) {
+            if (Files.isDirectory(path.resolve("loader").resolve("entries"))) {
                 return mount;
             }
         }
         return null;
+    }
+
+    /** Install kernels through systemd's kernel-install when the ESP has its own EFI mount. */
+    public static boolean isDedicatedEfiEsp(String espPath) {
+        Path normalized = Path.of(espPath).toAbsolutePath().normalize();
+        String mount = normalized.toString();
+        return mount.equals("/efi") || mount.equals("/boot/efi");
+    }
+
+    public static boolean installKernelsOnEfiEsp(String espPath) {
+        Path normalized = Path.of(espPath).toAbsolutePath().normalize();
+        String mount = normalized.toString();
+        if (!isDedicatedEfiEsp(mount)) return false;
+        if (!isCommandPresent("kernel-install")) {
+            errorMessage("kernel-install is required when ESP_PATH is " + mount);
+            return false;
+        }
+        List<String> command = new ArrayList<>();
+        command.add("kernel-install");
+        command.add("--esp-path=" + mount);
+        command.add("add-all");
+        try {
+            Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+            String output;
+            try (BufferedReader reader = process.inputReader()) {
+                output = reader.lines().reduce((a, b) -> a + System.lineSeparator() + b).orElse("");
+            }
+            int status = process.waitFor();
+            if (status != 0) {
+                errorMessage("kernel-install add-all failed (exit " + status + "): " + output);
+                return false;
+            }
+            if (!output.isBlank()) infoMessage(output);
+            return true;
+        } catch (IOException e) {
+            errorMessage("Failed to run kernel-install: " + e.getMessage());
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            errorMessage("Interrupted while running kernel-install");
+            return false;
+        }
     }
 
 
@@ -1251,8 +1293,7 @@ public class Utility {
      */
     public static int getSnapshotIdFromKernelCmdline() {
         String line;
-        try {
-            BufferedReader reader = new BufferedReader(new FileReader(Config.PROC_CMDLINE));
+        try (BufferedReader reader = new BufferedReader(new FileReader(Config.PROC_CMDLINE))) {
             line = reader.readLine();
         } catch (IOException e) {
             line = null;

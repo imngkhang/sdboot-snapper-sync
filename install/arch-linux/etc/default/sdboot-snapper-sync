@@ -1,10 +1,8 @@
 ### OS Entry Targeting
-### This tool does not automatically know the custom OS name used in $ESP_PATH/limine.conf.
-### Set the OS name here to match the entry name in $ESP_PATH/limine.conf.
+### Optional display name for this OS in generated systemd-boot snapshot entries.
 ###
 ### Tips:
-### * Alternatively, add "comment: machine-id=<machine-id>" under your OS entry name in $ESP_PATH/limine.conf.
-###   The machine-id allows the tool to automatically target the correct entry. Changing the OS name does not matter.
+### systemd-boot entries with this machine-id are selected automatically.
 ### * If unset, it reads PRETTY_NAME or NAME from /etc/os-release, with a fallback to /etc/lsb-release.
 ###
 #TARGET_OS_NAME="Arch Linux"
@@ -18,7 +16,7 @@
 
 ### Boot Partition Usage Limit
 ### Sets the maximum usage (in percent) for your FAT32 boot partition. Value must be between 1 and 99. Default: 85.
-### No new snapshot entries will be added to Limine if this limit is reached.
+### No new snapshot entries will be added to systemd-boot if this limit is reached.
 ### A larger FAT32 boot partition allows for more snapshot entries.
 ###
 ### Tips:
@@ -48,7 +46,7 @@ LIMIT_USAGE_PERCENT=85
 
 
 ### Exclude Snapshot Types
-### If a snapshot has a matching type, it will not be added into Limine.
+### If a snapshot has a matching type, it will not be added to the systemd-boot menu.
 ###
 ### Example:
 ###   EXCLUDE_SNAPSHOT_TYPES="pre, post"
@@ -57,7 +55,7 @@ LIMIT_USAGE_PERCENT=85
 
 
 ### Exclude Entries from Snapshots
-### Matching kernels or entries are excluded from Limine snapshots. This helps reduce boot partition space usage.
+### Matching kernels or entries are excluded from snapshots. This helps reduce boot partition space usage.
 ###
 ### WARNING:
 ### - Restoring an old snapshot may use outdated config and exclude unintended entries from the current "backup" snapshot.
@@ -201,13 +199,13 @@ RESTORE_METHOD=replace
 
 
 ### Snapshot Entry Formatting
-### Set the number of spaces to indent each line in all snapshot entries within $ESP_PATH/limine.conf.
+### Retained for config compatibility; systemd-boot BLS files do not use indentation.
 ### If not set, the default is 5.
 #SPACE_NUMBER=5
 
 
 ### Snapshot Name Format
-### Choose a format for how snapshot entries look in the Limine bootloader:
+### Retained for config compatibility; systemd-boot snapshot titles use the snapshot ID and description.
 ### 0. ID=111 2023-12-20 10:59:59 (default)
 ### 1. 111│2023-12-20 10:59:59
 ### 2. 111 │ 2023-12-20 10:59:59
@@ -247,7 +245,7 @@ SNAPSHOT_FORMAT_CHOICE=2
 
 
 ### Automatic Config Backup
-### Automatically create a backup of 'limine.conf' and 'snapshots.json' before saving any changes
+### Automatically create a backup of generated BLS entries and 'snapshots.json' before saving any changes
 ### but only if their existing backups ('*.old') are older than the specified time (in hours).
 ### This setting is unrelated to snapshot creation.
 ### Default: 6 hours if unset.

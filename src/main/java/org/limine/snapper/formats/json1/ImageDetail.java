@@ -2,7 +2,6 @@ package org.limine.snapper.formats.json1;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.limine.snapper.formats.limine8.Limine;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -46,6 +45,11 @@ public record ImageDetail(@JsonProperty("limineKey") String limineKey,
 
     @JsonIgnore
     public String getSnapshotLine() {
-        return Limine.replace(limineKey) + " " + Limine.uri(properties, this.snapshotFilePathLine().trim());
+        String key = switch (limineKey) {
+            case "EFI" -> "efi";
+            case "INITRD" -> "initrd";
+            default -> "linux";
+        };
+        return key + " " + this.snapshotFilePathLine().trim();
     }
 }

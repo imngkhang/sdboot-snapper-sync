@@ -165,7 +165,6 @@ public class Main {
         ConfigReader configReader = new ConfigReader();
         configReader.loadQuietMode();
         Config config = configReader.readConfig();
-        LimineReader limine = new LimineReader(config);
         // Read /<esp>/<machine-id>/limine_history/snapshots.json
         String manifestPath = Utility.buildPath(config.espPath(), config.machineID(), Config.HISTORY_FOLDER, Config.MANIFEST_FILE);
         Manifest manifest = HistoryReader.load(manifestPath);
@@ -199,10 +198,7 @@ public class Main {
         if (isManifestChanged || manager.checkUpdate() || HistoryWriter.updateManifest(manifest)) {
             HistoryWriter.backup(manifestPath);
             HistoryWriter.save(manifest, manifestPath);
-            LimineWriter writer = new LimineWriter(config, limine);
-            writer.backup();
-            writer.setSnapshots(manifest);
-            writer.save();
+            new BlsWriter(config).save(manifest);
         }
     }
 
@@ -226,25 +222,29 @@ public class Main {
             return;
         }
 
+        // On a dedicated EFI mount, systemd copies installed kernels and creates
+        // their BLS entries. The /boot LSS path keeps its snapshot workflow below.
+        Utility.installKernelsOnEfiEsp(config.espPath());
+
         String manifestPath = Utility.buildPath(config.espPath(), config.machineID(), Config.HISTORY_FOLDER, Config.MANIFEST_FILE);
         AtomicReference<Manifest> manifestRef = new AtomicReference<>();
         AtomicReference<SnapperReader> snapperRef = new AtomicReference<>();
-        AtomicReference<LimineReader> limineRef = new AtomicReference<>();
+        AtomicReference<SystemdBootReader> bootEntryReaderRef = new AtomicReference<>();
         // Read /<esp>/<machine-id>/limine_history/snapshots.json
         Thread historyThread = new Thread(() -> manifestRef.set(HistoryReader.load(manifestPath)));
         Thread snapperThread = new Thread(() -> snapperRef.set(new SnapperReader(addedID)));
-        Thread limineThread = new Thread(() -> limineRef.set(new LimineReader(config)));
+        Thread bootEntryReaderThread = new Thread(() -> bootEntryReaderRef.set(new SystemdBootReader(config)));
 
         snapperThread.start();
-        limineThread.start();
+        bootEntryReaderThread.start();
         historyThread.start();
 
-        limineThread.join();
+        bootEntryReaderThread.join();
         snapperThread.join();
         historyThread.join();
 
         SnapperReader snapper = snapperRef.get();
-        LimineReader limine = limineRef.get();
+        SystemdBootReader bootEntries = bootEntryReaderRef.get();
         Manifest manifest = manifestRef.get();
         if (manifest == null) {
             return;
@@ -255,10 +255,10 @@ public class Main {
         SnapshotManager manager = new SnapshotManager(config);
         manager.sync(manifest, snapper);
 
-        boolean updateLimineConfig = manager.checkUpdate();
-        if (updateLimineConfig) {
-            // Check if your target OS name is found in limine.conf
-            if (limine.isTargetOsNotFound()) {
+        boolean updateBootEntries = manager.checkUpdate();
+        if (updateBootEntries) {
+            // Check that at least one matching systemd-boot entry exists.
+            if (bootEntries.isTargetOsNotFound()) {
                 String errMessage = Messages.get("text.please-set-target_os_name", Config.DEFAULT_CONFIG_FILE_PATH);
                 if (Config.TARGET_OS_NAME != null) {
                     errMessage = Messages.get("text.target-os-name-was-not", Config.TARGET_OS_NAME, Config.DEFAULT_CONFIG_FILE_PATH);
@@ -268,14 +268,14 @@ public class Main {
             }
 
             // Check if your OS entry has at least one kernel node.
-            if (limine.targetOS.nodes.isEmpty() || (limine.targetOS.nodes.size() < 2 && limine.isSnapshotsInsideOsNode)) {
-                String errMessage = Messages.get("text.your-os-entry-has-no", Utility.buildPath(config.espPath(), Config.LIMINE_CONFIG_FILE));
+            if (bootEntries.targetOS.nodes.isEmpty() || (bootEntries.targetOS.nodes.size() < 2 && bootEntries.isSnapshotsInsideOsNode)) {
+                String errMessage = Messages.get("text.your-os-entry-has-no", Utility.buildPath(config.espPath(), Config.BOOT_ENTRIES_DIRECTORY));
                 Utility.errorMessage(errMessage);
                 return;
             }
 
             if (manager.isSnapshotNew()) {
-                SnapshotEntry newSnapshotEntry = limine.createCurrentLimineEntry(snapper.lastEntry());
+                SnapshotEntry newSnapshotEntry = bootEntries.createCurrentBootEntry(snapper.lastEntry());
                 // Check the size of your boot partition if the usage limit is exceeded.
                 PartitionUsage usage = manager.predictSpaceUsage(newSnapshotEntry);
                 if (usage.exceedsLimit() && Config.MAX_SNAPSHOT_ENTRIES == Config.AUTO_SNAPSHOT_LIMIT) {
@@ -300,21 +300,18 @@ public class Main {
                 }
             }
         }
-        if (updateLimineConfig || isManifestChanged || HistoryWriter.updateManifest(manifest)) {
+        if (updateBootEntries || isManifestChanged || HistoryWriter.updateManifest(manifest)) {
             historyThread = new Thread(() -> {
                 HistoryWriter.backup(manifestPath);
                 HistoryWriter.save(manifest, manifestPath);
             });
             historyThread.start();
         }
-        limineThread = new Thread(() -> {
-            LimineWriter writer = new LimineWriter(config, limine);
-            writer.backup();
-            writer.setSnapshots(manifest);
-            writer.save();
+        bootEntryReaderThread = new Thread(() -> {
+            new BlsWriter(config).save(manifest);
         });
-        limineThread.start();
-        limineThread.join();
+        bootEntryReaderThread.start();
+        bootEntryReaderThread.join();
         historyThread.join();
     }
 
@@ -322,6 +319,7 @@ public class Main {
         Config.ENABLE_TMP_CONFIG = Utility.areYouInBtrfs() && Utility.areYouInSnapshot();
         // Load keywords and values from multiple config files
         Config config = new ConfigReader().readConfig();
+        Utility.installKernelsOnEfiEsp(config.espPath());
 
         // Read /<esp>/<machine-id>/limine_history/snapshots.json
         String manifestPath = Utility.buildPath(config.espPath(), config.machineID(), Config.HISTORY_FOLDER, Config.MANIFEST_FILE);
@@ -329,9 +327,9 @@ public class Main {
         // Autoload subvolume-path and snapshot-path from the manifest if they are not configured.
         HistoryReader.loadSubvolPaths(manifest);
 
-        // Check if your target OS name is found in limine.conf
-        LimineReader limine = new LimineReader(config, false);
-        if (limine.isTargetOsNotFound()) {
+        // Check that matching systemd-boot entries exist.
+        SystemdBootReader bootEntries = new SystemdBootReader(config, false);
+        if (bootEntries.isTargetOsNotFound()) {
             String errMessage = Messages.get("text.please-set-target_os_name", Config.DEFAULT_CONFIG_FILE_PATH);
             if (Config.TARGET_OS_NAME != null) {
                 errMessage = Messages.get("text.target-os-name-was-not", Config.TARGET_OS_NAME, Config.DEFAULT_CONFIG_FILE_PATH);
@@ -344,7 +342,7 @@ public class Main {
 
         // Select snapshot ID for the restore.
         SnapshotManager manager = new SnapshotManager(config);
-        RestoreContext restoreContext = manager.preRestoreKernels(manifest, limine, snapshotID);
+        RestoreContext restoreContext = manager.preRestoreKernels(manifest, bootEntries, snapshotID);
         if (restoreContext == null || !restoreContext.isValid()) {
             Config.RESTORE_MODE = false;
             Utility.exitWithError(Messages.get("error.the-restore-is-invalid"), false);
@@ -362,13 +360,7 @@ public class Main {
             // Overwrite /<esp>/<machine-id>/limine_history/snapshots.json
             HistoryWriter.save(manifest, manifestPath);
 
-            LimineWriter writer = new LimineWriter(config, limine);
-            // Backup /<esp>/limine.conf
-            writer.backup();
-            // Overwrite the updated snapshots-list and the current configs in /<esp>/limine.conf
-            writer.setTargetOS(restoredEntry);
-            writer.setSnapshots(manifest);
-            writer.save();
+            new BlsWriter(config).save(manifest);
         }
     }
 
@@ -377,6 +369,7 @@ public class Main {
         Config.ENABLE_TMP_CONFIG = Utility.areYouInBtrfs() && Utility.areYouInSnapshot();
         // Load keywords and values from multiple config files
         Config config = new ConfigReader().readConfig();
+        Utility.installKernelsOnEfiEsp(config.espPath());
 
         // Read /<esp>/<machine-id>/limine_history/snapshots.json
         String manifestPath = Utility.buildPath(config.espPath(), config.machineID(), Config.HISTORY_FOLDER, Config.MANIFEST_FILE);
@@ -384,9 +377,9 @@ public class Main {
         // Autoload subvolume-path and snapshot-path from the manifest if they are not configured.
         HistoryReader.loadSubvolPaths(manifest);
 
-        // Check if your target OS name is found in limine.conf
-        LimineReader limine = new LimineReader(config, true);
-        if (limine.isTargetOsNotFound()) {
+        // Check that matching systemd-boot entries exist.
+        SystemdBootReader bootEntries = new SystemdBootReader(config, true);
+        if (bootEntries.isTargetOsNotFound()) {
             String errMessage = Messages.get("text.please-set-target_os_name", Config.DEFAULT_CONFIG_FILE_PATH);
             if (Config.TARGET_OS_NAME != null) {
                 errMessage = Messages.get("text.target-os-name-was-not", Config.TARGET_OS_NAME, Config.DEFAULT_CONFIG_FILE_PATH);
@@ -397,7 +390,7 @@ public class Main {
 
         // Select snapshot ID for the restore.
         SnapshotManager manager = new SnapshotManager(config);
-        RestoreContext restoreContext = manager.preRestore(manifest, limine);
+        RestoreContext restoreContext = manager.preRestore(manifest, bootEntries);
         if (restoreContext == null || !restoreContext.isValid()) {
             Utility.exitWithError(Messages.get("error.the-restore-is-invalid"), false);
             return;
@@ -413,7 +406,7 @@ public class Main {
         } else {
             // It's time to start restoring a snapshot.
             // Copy the selected snapshot entry from snapshots.json and write it to the target OS node.
-            SnapshotEntry restoredEntry = manager.restore(manifest, limine, restoreContext);
+            SnapshotEntry restoredEntry = manager.restore(manifest, bootEntries, restoreContext);
             if (restoredEntry == null) {
                 Utility.exitWithError(Messages.get("error.the-restore-failed"), true);
                 return;
@@ -422,13 +415,7 @@ public class Main {
                 // Overwrite /<esp>/<machine-id>/limine_history/snapshots.json
                 HistoryWriter.save(manifest, manifestPath);
 
-                LimineWriter writer = new LimineWriter(config, limine);
-                // Backup /<esp>/limine.conf
-                writer.backup();
-                // Overwrite the updated snapshots-list and the current configs in /<esp>/limine.conf
-                writer.setTargetOS(restoredEntry);
-                writer.setSnapshots(manifest);
-                writer.save();
+                new BlsWriter(config).save(manifest);
             }
         }
         if (Utility.isFilePresent(Config.RESTORE_LOCK_FILE)) {

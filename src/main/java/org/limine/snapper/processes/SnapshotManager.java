@@ -24,9 +24,9 @@ public class SnapshotManager {
     }
 
     /**
-     * Check whether the last Snapper entry is the newest and is not yet in the Limine entries.
+     * Check whether the last Snapper entry is the newest and is not yet in the boot entries.
      * If so, add it.
-     * Clean outdated Limine snapshot entries if they are not present in the Snapper list.
+     * Clean outdated snapshot entries if they are not present in the Snapper list.
      */
     public void sync(Manifest manifest, SnapperReader snapper) {
 
@@ -140,7 +140,7 @@ public class SnapshotManager {
                 this.isUpdateNeeded = true;
                 shouldFilesBeDeleted = true;
             } else {
-                // Update the Limine snapshot if the description of the Snapper entry has been changed.
+                // Update the boot snapshot if its Snapper description has changed.
                 String oldDescription = limineSnapshot.snapperEntry().properties().get(SnapperProperty.DESCRIPTION.replace);
                 String newDescription = snapperEntry.properties().get(SnapperProperty.DESCRIPTION.replace);
                 if (!Objects.equals(oldDescription, newDescription)) {
@@ -212,12 +212,12 @@ public class SnapshotManager {
     public void historyAddSnapshot(Manifest manifest, SnapshotEntry lastSnapshotEntry) {
         if (lastSnapshotEntry.kernelEntries().isEmpty()) {
             if (!Config.RESTORE_MODE) {
-                // The current snapshot entry has no kernel entry, it should not be added to the Limine menu.
+                // The current snapshot entry has no kernel entry, so it cannot be added to the boot menu.
                 Utility.errorMessage(Messages.get("error.cannot-create-snapshot-boot-entry"), Messages.get("error.no-valid-kernel-entry-found"));
             }
             return;
         }
-        // Copy or move any image files to the Limine history directory.
+        // Copy or move any image files to the boot history directory.
         for (ImageDetail imageDetail : lastSnapshotEntry.allImages()) {
             if (Config.RESTORE_MODE && imageDetail.fileHashName().endsWith(Config.NO_FILE_NAME)) {
                 // There is no image file. No need to back up this file during the restore.
@@ -231,10 +231,10 @@ public class SnapshotManager {
             }
             isUpdateNeeded = true;
             if (Config.RESTORE_MODE) {
-                // Move the image file to the Limine history directory
+                // Move the image file to the boot history directory
                 Utility.moveFile(sourceFilePath, targetFilePath);
             } else {
-                // Copy the image file to the Limine history directory
+                // Copy the image file to the boot history directory
                 Utility.copyFile(sourceFilePath, targetFilePath);
             }
         }
@@ -321,12 +321,12 @@ public class SnapshotManager {
     }
 
 
-    public RestoreContext preRestoreKernels(Manifest manifest, LimineReader limine, String customID) {
+    public RestoreContext preRestoreKernels(Manifest manifest, SystemdBootReader limine, String customID) {
         SnapshotEntry snapshotEntry = checkCustomSnapshotID(manifest, customID);
         if (snapshotEntry == null) {
             return null;
         } else {
-            SnapshotEntry targetEntry = limine.createCurrentLimineEntry();
+            SnapshotEntry targetEntry = limine.createCurrentBootEntry();
             boolean isBackupNeeded = false;
             // Predict if there is enough partition space when adding new files?
             PartitionUsage usage = predictSpaceUsage(targetEntry, snapshotEntry, isBackupNeeded);
@@ -339,12 +339,12 @@ public class SnapshotManager {
         }
     }
 
-    public RestoreContext preRestore(Manifest manifest, LimineReader limine) {
+    public RestoreContext preRestore(Manifest manifest, SystemdBootReader limine) {
         SnapshotEntry snapshotEntry = confirmOrSelectSnapshot(manifest);
         if (snapshotEntry == null) {
             return null;
         }
-        SnapshotEntry targetEntry = limine.createCurrentLimineEntry();
+        SnapshotEntry targetEntry = limine.createCurrentBootEntry();
         boolean isBackupNeeded = true;
         // Predict if there is enough partition space when adding new files?
         PartitionUsage usage = predictSpaceUsage(targetEntry, snapshotEntry, isBackupNeeded);
@@ -395,7 +395,7 @@ public class SnapshotManager {
     /**
      * Restoration process
      */
-    public SnapshotEntry restore(Manifest manifest, LimineReader limine, RestoreContext restoreContext) {
+    public SnapshotEntry restore(Manifest manifest, SystemdBootReader limine, RestoreContext restoreContext) {
         int snapshotID = restoreContext.snapshotEntry().snapperEntry().snapshotID();
 
         String subvolumePath = Utility.removeSurroundingSlashes(Config.ROOT_SUBVOLUME_PATH);
@@ -575,7 +575,7 @@ public class SnapshotManager {
                 }
             }
         }
-        // Move the backup subvolume to the Snapper list, move its kernel files to the Limine history, and then update the manifest.
+        // Move the backup subvolume to the Snapper list, move its kernel files to the boot history, and then update the manifest.
         if (restoreContext.isBackupNeeded()) {
             Utility.infoMessage(Messages.get("info.adding-entry-to-snapper-list", restoreContext.backupDescription()));
             int latestSnapshotID = Utility.findLatestSnapperNumber(fullSnapshotsPath);
@@ -609,9 +609,9 @@ public class SnapshotManager {
                     String localTime = Utility.convertUTCtoLocal(utcTime);
                     SnapperEntry snapperEntry = new SnapperEntry(latestSnapshotID, utcTime, localTime, null);
                     snapperEntry.properties().put(SnapperProperty.DESCRIPTION.replace, restoreContext.backupDescription());
-                    SnapshotEntry backupEntry = limine.createCurrentLimineEntry(snapperEntry);
+                    SnapshotEntry backupEntry = limine.createCurrentBootEntry(snapperEntry);
 
-                    // Move the "broken" kernel files to the Limine history directory.
+                    // Move the "broken" kernel files to the boot history directory.
                     // snapshots.json (the manifest) adds the backup entry.
                     this.historyAddSnapshot(manifest, backupEntry);
 

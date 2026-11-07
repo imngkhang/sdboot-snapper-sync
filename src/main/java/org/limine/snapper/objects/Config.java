@@ -3,17 +3,15 @@ package org.limine.snapper.objects;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 
 public record Config(String machineID, String espPath) {
     public static final String VERSION = "1.32.1";
     public static final String MANIFEST_VERSION = "1.3.0";
-    public static final Set<Integer> UNSUPPORTED_LIMINE_MAJOR_VERSIONS = Set.of(1, 2, 3, 4, 5, 6, 7);
     public static final String HISTORY_FOLDER = "limine_history";
     public static final String MANIFEST_FILE = "snapshots.json";
-    public static final String DEFAULT_CONFIG_FILE_PATH = "/etc/default/limine";
+    public static final String DEFAULT_CONFIG_FILE_PATH = "/etc/default/sdboot-snapper-sync";
     public static final String TMP_CONFIG_FILE_PATH = "/tmp/limine-snapper-sync.conf";
-    public static final String LIMINE_CONFIG_FILE = "limine.conf";
+    public static final String BOOT_ENTRIES_DIRECTORY = "loader/entries";
     public static final String DEFAULT_TIMESTAMP = "1970-01-01 00:00:00";
     public static final String NO_FILE_NAME = "is_not_available";
     public static final String RSYNC_CMDLINE = "rsync -aAhHxX --delete --info=progress2 ";

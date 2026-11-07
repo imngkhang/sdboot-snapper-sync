@@ -1,6 +1,5 @@
 package org.limine.snapper.processes;
 
-import org.limine.snapper.formats.limine8.Limine;
 import org.limine.snapper.objects.*;
 
 import java.io.BufferedReader;
@@ -20,7 +19,6 @@ public class ConfigReader {
     private final Map<String, String> configs = new HashMap<>();
 
     public ConfigReader() {
-        loadConfigFile("/etc/limine-snapper-sync.conf");
         loadConfigFile(Config.DEFAULT_CONFIG_FILE_PATH);
 
         Output c = Utility.getCommandOutput("tput colors", false, "");
@@ -97,7 +95,7 @@ public class ConfigReader {
         if (targetOs == null || targetOs.isBlank()) {
             Config.TARGET_OS_NAME = getLinuxDistroName();
         } else {
-            Config.TARGET_OS_NAME = Limine.cleanName(targetOs);
+            Config.TARGET_OS_NAME = targetOs.trim();
         }
 
         String maxSnapshotEntries = configs.get("MAX_SNAPSHOT_ENTRIES");
@@ -118,16 +116,17 @@ public class ConfigReader {
 
         String espPath = configs.get("ESP_PATH");
         if (espPath == null || espPath.isBlank()) {
-            espPath = Utility.findLimineBootPartition(Config.LIMINE_CONFIG_FILE);
+            espPath = Utility.findSystemdBootPartition();
         }
         if (espPath == null) {
-            Utility.exitWithError(Messages.get("error.fat32-boot-partition-with-not", Config.LIMINE_CONFIG_FILE, Config.DEFAULT_CONFIG_FILE_PATH));
+            Utility.exitWithError(Messages.get("error.fat32-boot-partition-with-not", Config.BOOT_ENTRIES_DIRECTORY, Config.DEFAULT_CONFIG_FILE_PATH));
             return null;
         }
-        // Does $ESP_PATH/limine.conf exist?
-        String limineConfigPath = Utility.buildPath(espPath, Config.LIMINE_CONFIG_FILE);
-        if (!Utility.isFilePresent(limineConfigPath)) {
-            Utility.exitWithError(Messages.get("error.file-not-found"), limineConfigPath);
+        // systemd-boot stores Type #1 entries under loader/entries.
+        String entriesPath = Utility.buildPath(espPath, Config.BOOT_ENTRIES_DIRECTORY);
+        boolean kernelInstallCanInitialize = Utility.isDedicatedEfiEsp(espPath) && Utility.isCommandPresent("kernel-install");
+        if (!Files.isDirectory(Path.of(entriesPath)) && !kernelInstallCanInitialize) {
+            Utility.exitWithError(Messages.get("error.file-not-found"), entriesPath);
             return null;
         }
 

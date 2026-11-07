@@ -8,7 +8,7 @@ export TEXTDOMAINDIR="/usr/share/locale"
 readonly SCRIPT_NAME="limine-snapper-watcher"
 readonly WATCH_DIR="/.snapshots"
 readonly BASE_CONFIG="/etc/limine-snapper-sync.conf"
-readonly DEFAULT_CONFIG="/etc/default/limine"
+readonly DEFAULT_CONFIG="/etc/default/sdboot-snapper-sync"
 readonly TMP_CONFIG="/tmp/limine-snapper-sync.conf"
 readonly SYNC_CMD=(limine-snapper-sync)
 

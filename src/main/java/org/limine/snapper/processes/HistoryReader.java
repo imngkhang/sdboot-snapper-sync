@@ -9,7 +9,6 @@ import org.limine.snapper.formats.snapper.SnapperProperty;
 import org.limine.snapper.objects.Config;
 import org.limine.snapper.objects.ConsoleColor;
 import org.limine.snapper.objects.Hash;
-import org.limine.snapper.objects.Output;
 import tools.jackson.core.StreamReadFeature;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -19,8 +18,6 @@ import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.List;
 import java.util.function.Function;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class HistoryReader {
 
@@ -125,17 +122,6 @@ public class HistoryReader {
         System.out.println();
         // Display a detail:
         printFormattedInfo(Messages.get("label.version"), Config.VERSION, true, ConsoleColor.GREEN_BOLD);
-        if (Utility.isCommandPresent("limine")) {
-            Output output = Utility.getCommandOutput("limine --version", false, "");
-            if (output.isSuccess()) {
-                String limineVersion = extractVersion(output.text().getFirst());
-                if (limineVersion != null) {
-                    if (isLimineMajorUnsupported(limineVersion)) {
-                        printFormattedInfo(Messages.get("label.limine-version"), Messages.get("label.is-not-supported", limineVersion), true, ConsoleColor.RED_BOLD);
-                    }
-                }
-            }
-        }
         printFormattedInfo(Messages.get("label.manifest-version"), manifest.getVersion(), true, ConsoleColor.GREEN_BOLD);
         String uuid = manifest.getUuid();
         if (uuid == null || uuid.isBlank()) {
@@ -324,46 +310,6 @@ public class HistoryReader {
             System.out.println(color + formattedLabel + "  " + ConsoleColor.RESET + value);
         }
     }
-
-    /**
-     * Method to extract a version number from a given string
-     */
-    private static String extractVersion(String input) {
-        // Define a regular expression pattern for matching version numbers
-        Pattern versionPattern = Pattern.compile("\\b(\\d+\\.\\d+\\.\\d+)\\b");
-        Matcher matcher = versionPattern.matcher(input);
-
-        // Check if a match is found and return the version number
-        if (matcher.find()) {
-            return matcher.group(1);
-        } else {
-            // Return a default value or handle the case when no version is found
-            return null;
-        }
-    }
-
-    private static boolean isLimineMajorUnsupported(String versionString) {
-        // Regex to extract the major part of the version
-        String regex = "^([0-9]+)\\.";
-        Pattern pattern = Pattern.compile(regex);
-        Matcher matcher = pattern.matcher(versionString);
-
-        if (matcher.find()) {
-            try {
-                // Extract a major version and convert to integer
-                int majorVersion = Integer.parseInt(matcher.group(1));
-                // Check if the major version is supported
-                return Config.UNSUPPORTED_LIMINE_MAJOR_VERSIONS.contains(majorVersion);
-            } catch (NumberFormatException e) {
-                // Error parsing major version
-                Utility.errorMessage(Messages.get("error.invalid-version-format"), versionString);
-            }
-        } else {
-            Utility.errorMessage(Messages.get("error.no-valid-version-format-found"), versionString);
-        }
-        return false;
-    }
-
 
     /**
      * Prints a snapper table with a nice format for the output in the terminal.

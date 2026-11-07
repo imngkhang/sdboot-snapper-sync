@@ -2,7 +2,6 @@ package org.limine.snapper.formats.json1;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.limine.snapper.formats.limine8.Limine;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -25,6 +24,6 @@ public record OptionDetail(@JsonProperty("limineKey") String limineKey,
 
     @JsonIgnore
     public String getSnapshotLine() {
-        return Limine.replace(limineKey) + " " + this.snapshotOptionLine().trim();
+        return limineKey.toLowerCase(java.util.Locale.ROOT) + " " + this.snapshotOptionLine().trim();
     }
 }

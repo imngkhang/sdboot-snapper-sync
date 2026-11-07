@@ -46,7 +46,7 @@ done
 # Variables
 readonly SCRIPT_NAME="limine-snapper-restore"
 readonly BASE_CONFIG="/etc/limine-snapper-sync.conf"
-readonly DEFAULT_CONFIG="/etc/default/limine"
+readonly DEFAULT_CONFIG="/etc/default/sdboot-snapper-sync"
 readonly TMP_CONFIG="/tmp/limine-snapper-sync.conf"
 export HOOK_CALLER="$SCRIPT_NAME"
 

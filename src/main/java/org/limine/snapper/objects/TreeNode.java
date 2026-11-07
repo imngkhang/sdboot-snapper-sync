@@ -1,6 +1,5 @@
 package org.limine.snapper.objects;
 
-import org.limine.snapper.formats.limine8.Limine;
 import org.limine.snapper.processes.MacroReplacer;
 
 import java.util.ArrayList;
@@ -19,7 +18,7 @@ public class TreeNode implements Comparable<TreeNode> {
 
     public TreeNode(String name, int depth, String parentNodeName) {
         this.name = name;
-        this.cleanName = MacroReplacer.replaceMacros(Limine.cleanName(name));
+        this.cleanName = MacroReplacer.replaceMacros(name == null ? null : name.trim().replaceFirst("^/+", ""));
         this.configLines = new ArrayList<>();
         this.nodes = new LinkedList<>();
         this.depth = depth;
@@ -112,7 +111,7 @@ public class TreeNode implements Comparable<TreeNode> {
         if (this.options == null) {
             this.options = new EntryOptions();
             for (String line : this.configLines) {
-                if (line.trim().startsWith(Limine.COMMENT.toString())) {
+                if (line.trim().startsWith("comment:")) {
                     this.options.parseComment(MacroReplacer.replaceMacros(line));
                 }
             }
