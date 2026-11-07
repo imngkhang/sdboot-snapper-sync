@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+# Messages go through the gettext catalog of the current language.
+# Without an installed catalog every $"..." string stays exactly as written here.
+export TEXTDOMAIN="limine-snapper-sync"
+export TEXTDOMAINDIR="/usr/share/locale"
+
+readonly SCRIPT_NAME="limine-snapper-list"
+export HOOK_CALLER="$SCRIPT_NAME"
+
+if ! command -v limine-snapper-sync &>/dev/null; then
+	echo $"ERROR: limine-snapper-sync not found." >&2
+	exit 1
+fi
+exec limine-snapper-sync --no-mutex --no-hooks --list "${@}"

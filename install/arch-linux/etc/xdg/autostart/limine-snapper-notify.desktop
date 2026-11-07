@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Limine-snapper-notify
+Comment=Notify on any errors from limine-snapper-sync
+Comment[ru]=Уведомляет об ошибках в работе limine-snapper-sync
+Icon=LimineSnapperSync
+Exec=limine-snapper-notify
+Terminal=false
+Type=Application
+Categories=Utility

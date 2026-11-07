@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+# Messages go through the gettext catalog of the current language.
+# Without an installed catalog every $"..." string stays exactly as written here.
+export TEXTDOMAIN="limine-snapper-sync"
+export TEXTDOMAINDIR="/usr/share/locale"
+readonly MUTEX_LIB="/usr/lib/limine/limine-mutex"
+
+if [[ ! -f "$MUTEX_LIB" ]]; then
+	echo $"Warning: $MUTEX_LIB not found." >&2
+	exit 0
+fi
+source "$MUTEX_LIB"
+mutex_lock "limine-snapper-lock"
+mutex_unlock

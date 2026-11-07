@@ -1,0 +1,15 @@
+# limine-snapper-sync
+# https://gitlab.com/Zesko/limine-snapper-sync
+
+[Trigger]
+Operation = Upgrade
+Operation = Install
+Operation = Remove
+Type = Package
+Target = *
+
+[Action]
+Description = Waiting for limine-snapper-sync to finish...
+When = PreTransaction
+Exec = /usr/share/libalpm/scripts/limine-snapper-lock
+NeedsTargets

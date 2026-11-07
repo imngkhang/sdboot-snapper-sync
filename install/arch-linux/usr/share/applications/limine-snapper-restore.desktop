@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Limine-snapper-restore
+Comment=Restore a selected system snapshot.
+Comment[ru]=Восстановление выбранного снимка системы
+Keywords=snapshot;restore;rollback;recovery;backup;btrfs;subvolume;snapper;limine;boot;bootloader;
+Keywords[ru]=снимок;снимки;восстановление;восстановить;откат;откатить;резервная копия;бэкап;подтом;btrfs;snapper;limine;загрузчик;загрузка;система;snapshot;restore;rollback;
+Icon=LimineSnapperSync
+Exec=limine-snapper-restore
+Terminal=false
+Type=Application
+Categories=Utility

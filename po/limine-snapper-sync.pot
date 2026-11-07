@@ -1,0 +1,173 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: limine-snapper-sync\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: install/arch-linux/usr/bin/limine-snapper-restore:17
+msgid "Error: --kernels requires a Snapper snapshot ID."
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-restore:33
+msgid "Unknown option: $1"
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-restore:35
+msgid "Usage: $prog [options]"
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-restore:36
+msgid "  --kernels <ID>    Restore kernel files from the specified Snapper snapshot ID"
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-restore:37
+msgid "  --notify          Send desktop notifications as a non-root user"
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-restore:53
+msgid "Restore this snapshot now!"
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-restore:54
+msgid "You are currently using this snapshot. Please restore it before rebooting to the normal system."
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-restore:56
+#: install/arch-linux/usr/bin/limine-snapper-sync:49
+#: install/arch-linux/usr/bin/limine-snapper-watcher:15
+msgid "WARNING"
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-restore:57
+#: install/arch-linux/usr/bin/limine-snapper-sync:50
+#: install/arch-linux/usr/bin/limine-snapper-watcher:16
+msgid "ERROR"
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-restore:83
+msgid "Root privileges are required to restore snapshot ID '$SNAPSHOT_ID'"
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-restore:142
+msgid "${TMP_CONFIG} is not owned by root, this file is ignored."
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-restore:159
+msgid "Snapshot detected!"
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-restore:160
+msgid "Restore now"
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-restore:165
+msgid "notify-send is not installed."
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-restore:237
+msgid "No suitable terminal found. Please configure TERMINAL=<terminal app> in ${DEFAULT_CONFIG}."
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-restore:246
+#: install/arch-linux/usr/bin/limine-snapper-info:12
+#: install/arch-linux/usr/bin/limine-snapper-list:12
+#: install/arch-linux/usr/bin/limine-snapper-remove:12
+msgid "ERROR: limine-snapper-sync not found."
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-restore:259
+msgid "This must be run as root."
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-restore:267
+msgid "You are not in a snapshot."
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-sync:101
+msgid "${HOOK_CALLER} must be run as root."
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-sync:106
+msgid "Failed to exec AUTH_METHOD: $AUTH_METHOD"
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-sync:118
+msgid "Mutex lock timeout on ${name}."
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-sync:142
+msgid "$dir hook failed (fatal, exit code $rc): $hook"
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-sync:145
+msgid "$dir hook failed (exit code $rc): $hook"
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-sync:155
+msgid "Restore complete. Please reboot manually. Press Enter to exit:"
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-sync:160
+msgid "Restore complete. Reboot now? [Y/n]:"
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-sync:213
+msgid "limine-snapper-restore is already running."
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-sync:233
+msgid "Aborting $HOOK_CALLER: pre hook failed"
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-watcher:43
+msgid "${SCRIPT_NAME} must be run as root."
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-watcher:53
+msgid "Root filesystem is not Btrfs. ${SCRIPT_NAME} stopped."
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-watcher:102
+msgid "You are in the read-only Btrfs. ${SCRIPT_NAME} stopped."
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-watcher:107
+msgid "You are booted from the snapshot. ${SCRIPT_NAME} stopped."
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-watcher:115
+msgid "Directory $WATCH_DIR does not exist. limine-snapper-sync is triggered to initialize a snapper config for $WATCH_DIR."
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-watcher:120
+msgid "inotifywait is not installed. Falling back to Snapper plugin integration."
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-watcher:128
+msgid "[SKIP] Cleanup lock is active, skipping sync"
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-notify:53
+msgid "notify-send not available; exiting."
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-notify:105
+msgid "$SCRIPT_NAME should not run as root."
+msgstr ""
+
+#: install/arch-linux/usr/bin/limine-snapper-notify:111
+msgid "journalctl is not installed."
+msgstr ""
+
+#: install/arch-linux/usr/lib/limine/limine-mutex:37
+msgid "WARNING: Mutex lock timeout on ${name}."
+msgstr ""
+
+#: install/arch-linux/usr/lib/snapper/plugins/10-limine-snapper-sync:22
+msgid "ERROR: $msg"
+msgstr ""
+
+#: install/arch-linux/usr/share/libalpm/scripts/limine-snapper-lock:10
+msgid "Warning: $MUTEX_LIB not found."
+msgstr ""

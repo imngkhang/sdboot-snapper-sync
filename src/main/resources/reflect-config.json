@@ -1,0 +1,44 @@
+[
+        {
+                "name": "org.limine.snapper.formats.json1.Manifest",
+                "allDeclaredConstructors": true,
+                "allDeclaredMethods": true,
+                "allDeclaredFields": true
+        },
+        {
+                "name": "org.limine.snapper.formats.json1.SnapshotEntry",
+                "allDeclaredConstructors": true,
+                "allDeclaredMethods": true,
+                "allDeclaredFields": true
+        },
+        {
+                "name": "org.limine.snapper.formats.json1.KernelEntry",
+                "allDeclaredConstructors": true,
+                "allDeclaredMethods": true,
+                "allDeclaredFields": true
+        },
+        {
+                "name": "org.limine.snapper.formats.json1.ImageDetail",
+                "allDeclaredConstructors": true,
+                "allDeclaredMethods": true,
+                "allDeclaredFields": true
+        },
+        {
+                "name": "org.limine.snapper.formats.json1.OptionDetail",
+                "allDeclaredConstructors": true,
+                "allDeclaredMethods": true,
+                "allDeclaredFields": true
+        },
+        {
+                "name": "org.limine.snapper.formats.json1.CmdlineDetail",
+                "allDeclaredConstructors": true,
+                "allDeclaredMethods": true,
+                "allDeclaredFields": true
+        },
+        {
+                "name": "org.limine.snapper.formats.json1.SnapperEntry",
+                "allDeclaredConstructors": true,
+                "allDeclaredMethods": true,
+                "allDeclaredFields": true
+        }
+]

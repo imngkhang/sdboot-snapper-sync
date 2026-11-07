@@ -1,0 +1,301 @@
+#!/usr/bin/env bash
+
+# Messages go through the gettext catalog of the current language.
+# Without an installed catalog every $"..." string stays exactly as written here.
+export TEXTDOMAIN="limine-snapper-sync"
+export TEXTDOMAINDIR="/usr/share/locale"
+
+ENABLE_NOTIFY="no"
+SNAPSHOT_ID=""
+RESTORE_KERNELS_ONLY="no"
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+	--kernels)
+		if [[ -z "$2" || "$2" == -* ]]; then
+			echo $"Error: --kernels requires a Snapper snapshot ID." >&2
+			exit 1
+		fi
+		SNAPSHOT_ID="$2"
+		RESTORE_KERNELS_ONLY="yes"
+		shift 2
+		;;
+	--notify)
+		ENABLE_NOTIFY="yes"
+		shift
+		;;
+	--)
+		shift
+		break
+		;;
+	-*)
+		echo $"Unknown option: $1" >&2
+		prog="$(basename "$0")"
+		echo $"Usage: $prog [options]"
+		echo $"  --kernels <ID>    Restore kernel files from the specified Snapper snapshot ID"
+		echo $"  --notify          Send desktop notifications as a non-root user"
+		exit 1
+		;;
+	*)
+		break
+		;;
+	esac
+done
+
+# Variables
+readonly SCRIPT_NAME="limine-snapper-restore"
+readonly BASE_CONFIG="/etc/limine-snapper-sync.conf"
+readonly DEFAULT_CONFIG="/etc/default/limine"
+readonly TMP_CONFIG="/tmp/limine-snapper-sync.conf"
+export HOOK_CALLER="$SCRIPT_NAME"
+
+TITLE=$"Restore this snapshot now!"
+MESSAGE=$"You are currently using this snapshot. Please restore it before rebooting to the normal system."
+
+_label_warning=$"WARNING"
+_label_error=$"ERROR"
+
+_color_reset=""
+_color_yellow=""
+_color_red=""
+colors="$(tput colors 2>/dev/null || echo 0)"
+if ((colors >= 8)); then
+	_color_reset="\033[0m"
+	_color_yellow="\033[1;33m"
+	_color_red="\033[1;31m"
+fi
+
+info_msg() {
+	echo "$1"
+}
+
+warning_msg() {
+	echo -e "${_color_yellow}${_label_warning}: $1${_color_reset} ${2:-}" >&2
+}
+
+error_msg() {
+	echo -e "${_color_red}${_label_error}: $1${_color_reset} ${2:-}" >&2
+}
+
+if [[ -n "${SNAPSHOT_ID}" ]]; then
+	if ((EUID != 0)); then
+		error_msg $"Root privileges are required to restore snapshot ID '$SNAPSHOT_ID'"
+		exit 1
+	fi
+fi
+
+### Load key=value config
+load_key_value_config() {
+	local file="$1"
+	while IFS= read -r line || [[ -n "$line" ]]; do
+		# Skip blank lines and comments
+		[[ "$line" =~ ^[[:space:]]*(#.*)?$ ]] && continue
+
+		# Match VAR = value
+		if [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*(.*)$ ]]; then
+			local var="${BASH_REMATCH[1]}"
+			local val="${BASH_REMATCH[2]}"
+			val="${val%\"}"
+			val="${val#\"}"
+			export "$var"="$val"
+		fi
+	done <"$file"
+}
+
+# Load configuration
+if [[ -f "${BASE_CONFIG}" ]]; then
+	load_key_value_config "${BASE_CONFIG}"
+fi
+
+if [[ -f "${DEFAULT_CONFIG}" ]]; then
+	load_key_value_config "${DEFAULT_CONFIG}"
+fi
+
+# Check if you are in snapshot
+is_snapshot() {
+	cmdline=$(</proc/cmdline)
+	if [[ $cmdline =~ rootflags.*subvol=.*?/([0-9]+)/snapshot ]]; then
+		return 0
+	else
+		return 1
+	fi
+}
+
+# Check if you are running in root
+is_root() {
+	[[ $EUID -eq 0 ]]
+}
+
+# Check if the snapshot is read-only and load temporary config
+check_and_load_config() {
+	# Read the Btrfs property "ro" from the root partition
+	local prop
+	prop=$(btrfs property get / ro 2>/dev/null)
+	# Check if "true" is included in the result
+	if [[ $prop == *true* ]] && is_snapshot && is_root; then
+		# Load the temporary config if it exists
+		if [[ -f "${TMP_CONFIG}" ]]; then
+			if [[ $(stat -c '%U' "${TMP_CONFIG}") == "root" ]]; then
+				load_key_value_config "${TMP_CONFIG}"
+			else
+				warning_msg $"${TMP_CONFIG} is not owned by root, this file is ignored."
+			fi
+		elif [[ -f "${DEFAULT_CONFIG}" ]]; then
+			cp "${DEFAULT_CONFIG}" "${TMP_CONFIG}"
+		elif [[ -f "${BASE_CONFIG}" ]]; then
+			cp "${BASE_CONFIG}" "${TMP_CONFIG}"
+		fi
+	fi
+}
+
+# Function to check if the script is running in a graphical environment
+is_graphical() {
+	[[ $XDG_SESSION_TYPE == "x11" || $XDG_SESSION_TYPE == "wayland" ]]
+}
+
+# Notify using notify-send
+notify_user() {
+	local app_name=$"Snapshot detected!"
+	local restore_action=$"Restore now"
+	local action
+	if command -v notify-send &>/dev/null; then
+		action=$(notify-send -u "critical" --app-name="${app_name}" --icon="${NOTIFICATION_ICON:-/usr/share/icons/hicolor/128x128/apps/LimineSnapperSync.png}" --action="default=Reply" --action="openRestore=${restore_action}" "$TITLE" "$MESSAGE" -t 0)
+	else
+		error_msg $"notify-send is not installed."
+		logger -t "${SCRIPT_NAME}" -p err "notify-send is not installed."
+		exit 1
+	fi
+	echo "$action"
+}
+
+get_terminal_command() {
+	local -a args auth
+	if [[ -n "${TERMINAL:-}" ]] && command -v "${TERMINAL}" &>/dev/null; then
+		TERMINAL_CMD=("${TERMINAL}")
+		case "${TERMINAL}" in
+		gnome-terminal)
+			read -ra args <<<"${TERMINAL_ARG:--- bash -c}"
+			;;
+		*)
+			read -ra args <<<"${TERMINAL_ARG:--e}"
+			;;
+		esac
+		TERMINAL_CMD+=("${args[@]}")
+
+	# Auto-detection fallback order
+	elif command -v konsole &>/dev/null; then
+		TERMINAL_CMD=(konsole -e)
+	elif command -v kgx &>/dev/null; then
+		TERMINAL_CMD=(kgx -e)
+	elif command -v cosmic-term &>/dev/null; then
+		TERMINAL_CMD=(cosmic-term -e)
+	elif command -v gnome-terminal &>/dev/null; then
+		TERMINAL_CMD=(gnome-terminal -- bash -c)
+	elif command -v xfce4-terminal &>/dev/null; then
+		TERMINAL_CMD=(xfce4-terminal -e)
+	elif command -v qterminal &>/dev/null; then
+		TERMINAL_CMD=(qterminal -e)
+	elif command -v mate-terminal &>/dev/null; then
+		TERMINAL_CMD=(mate-terminal -e)
+	elif command -v deepin-terminal &>/dev/null; then
+		TERMINAL_CMD=(deepin-terminal -e)
+	elif command -v foot &>/dev/null; then
+		TERMINAL_CMD=(foot -e)
+	elif command -v kitty &>/dev/null; then
+		TERMINAL_CMD=(kitty -e)
+	elif command -v wezterm &>/dev/null; then
+		TERMINAL_CMD=(wezterm start)
+	elif command -v alacritty &>/dev/null; then
+		TERMINAL_CMD=(alacritty -e)
+	elif command -v ptyxis &>/dev/null; then
+		TERMINAL_CMD=(ptyxis -e)
+	elif command -v ghostty &>/dev/null; then
+		TERMINAL_CMD=(ghostty -e)
+	elif command -v xterm &>/dev/null; then
+		TERMINAL_CMD=(xterm -e)
+	else
+		return 1
+	fi
+
+	# Build final command depending on terminal parsing behavior
+	case "${TERMINAL_CMD[0]}" in
+	gnome-terminal | xfce4-terminal | mate-terminal)
+		# Old GTK-based terminals need a single quoted string, not separate args
+		TERMINAL_CMD+=("${AUTH_METHOD} ${RESTORE_CMD[*]}")
+		;;
+	*)
+		# Some terminals fail to parse a single quoted string, so pass args as separate array elements
+		read -ra auth <<<"${AUTH_METHOD}"
+		TERMINAL_CMD+=("${auth[@]}" "${RESTORE_CMD[@]}")
+		;;
+	esac
+}
+
+open_terminal() {
+	if ! get_terminal_command; then
+		error_msg $"No suitable terminal found. Please configure TERMINAL=<terminal app> in ${DEFAULT_CONFIG}."
+		logger -t "${SCRIPT_NAME}" -p err "No suitable terminal found. Please configure TERMINAL=<terminal app> in ${DEFAULT_CONFIG}"
+		exit 1
+	fi
+	"${TERMINAL_CMD[@]}"
+}
+
+# Main logic
+if ! command -v limine-snapper-sync &>/dev/null; then
+	echo $"ERROR: limine-snapper-sync not found." >&2
+	exit 1
+fi
+
+check_and_load_config
+
+# Determine authentication method
+if [[ -z $AUTH_METHOD ]] && ! is_root; then
+	if is_graphical && command -v pkexec &>/dev/null; then
+		AUTH_METHOD="pkexec"
+	elif command -v sudo &>/dev/null; then
+		AUTH_METHOD="sudo"
+	else
+		error_msg $"This must be run as root."
+		exit 1
+	fi
+fi
+
+# Handle notification mode
+if [[ ${ENABLE_NOTIFY} == "yes" ]]; then
+	if ! is_snapshot; then
+		info_msg $"You are not in a snapshot."
+		exit 0
+	fi
+fi
+
+if [[ "$RESTORE_KERNELS_ONLY" == "yes" ]]; then
+	RESTORE_CMD=(limine-snapper-sync --restore-kernels "${SNAPSHOT_ID}")
+else
+	RESTORE_CMD=(limine-snapper-sync --restore --no-mutex)
+fi
+
+exit_code=0
+
+# Notify and execute the restore command
+if is_graphical && [[ ${ENABLE_NOTIFY} == "yes" ]] && ! is_root; then
+	action=$(notify_user)
+	if [[ $action == "openRestore" || $action == "default" ]]; then
+		open_terminal
+	fi
+elif is_graphical && ! is_root; then
+	open_terminal
+elif is_root; then
+	"${RESTORE_CMD[@]}"
+	exit_code="$?"
+else
+	# Fallback for TTY or non-graphical environments
+	${AUTH_METHOD} "${RESTORE_CMD[@]}"
+	exit_code="$?"
+fi
+
+if [[ ${ENABLE_MUTEX} == "yes" ]]; then
+	mutex_unlock
+fi
+
+exit "$exit_code"

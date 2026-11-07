@@ -1,0 +1,45 @@
+# limine-mutex - simple shell mutex using flock
+
+# Messages go through the gettext catalog of the current language.
+# Without an installed catalog every $"..." string stays exactly as written here.
+export TEXTDOMAIN="limine-snapper-sync"
+export TEXTDOMAINDIR="/usr/share/locale"
+#
+# This shell library provides two functions: `mutex_lock` and `mutex_unlock`.
+# They can be sourced and used by other scripts or tools to safely coordinate access
+# to shared files like `limine.conf` or bootable files on the same boot partition, avoiding race conditions.
+#
+# Usage:
+#   source /lib/limine/limine-mutex
+#   mutex_lock "some-task-name"
+#   # ... do critical work ...
+#   mutex_unlock
+#
+readonly BOOT_PARTITION_LOCK="/run/lock/boot-partition.lock"
+
+# Acquire a global lock to prevent concurrent access.
+# Arguments:
+#   $1 - name of the caller (used for error message)
+#   $2 - optional timeout in seconds (default: 30)
+mutex_lock() {
+	local name=${1:-"limine-snapper-sync-mutex"}
+	local timeout=${2:-30} # Default to 30 seconds if not provided
+	mkdir -p /run/lock
+	# Open the lock file and associate it with file descriptor 200
+	exec 200>${BOOT_PARTITION_LOCK} || {
+		# Try to delete and recreate the lock file if it fails
+		rm -f ${BOOT_PARTITION_LOCK}
+		exec 200>${BOOT_PARTITION_LOCK}
+	}
+
+	# Try to acquire the lock with timeout
+	flock --timeout="$timeout" 200 || {
+		echo $"WARNING: Mutex lock timeout on ${name}." >&2
+		return 1
+	}
+}
+
+# Release the global lock.
+mutex_unlock() {
+	flock --unlock 200
+}

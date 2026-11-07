@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+
+# Messages go through the gettext catalog of the current language.
+# Without an installed catalog every $"..." string stays exactly as written here.
+export TEXTDOMAIN="limine-snapper-sync"
+export TEXTDOMAINDIR="/usr/share/locale"
+
+set -euo pipefail
+
+ACTION="${1:-}"
+SUBVOLUME="${2:-}"
+SNAP_ID="${4:-}"
+
+# Command to run sync
+readonly SYNC_CMD=(limine-snapper-sync)
+
+# Only act on the root subvolume
+[[ "$SUBVOLUME" != "/" ]] && exit 0
+
+log_error() {
+	local msg="$1"
+	echo $"ERROR: $msg" >&2
+	logger -t "limine-snapper-sync" -p err "$msg"
+}
+
+# Extract <description> text from snapshot metadata
+get_description() {
+	local xml="$1"
+	if [[ ! -f "$xml" ]]; then
+		echo ""
+		return 1
+	fi
+	sed -n 's:.*<description>\(.*\)</description>.*:\1:p' "$xml" | head -n1
+}
+
+# Function to run limine-snapper-sync
+function run_sync() {
+	local op="$1" # add / delete / modify
+	local id="$2"
+
+	if [[ -z "$id" ]]; then
+		log_error "missing snapshot ID"
+		return 1
+	fi
+
+	local xml="/.snapshots/${id}/info.xml"
+
+	# On add: check metadata and skip writable-copy snapshots
+	if [[ "$op" == "add" ]]; then
+		if [[ ! -f "$xml" ]]; then
+			log_error "metadata file not found: ${xml}"
+			return 1
+		fi
+
+		local desc
+		desc=$(get_description "$xml")
+
+		# Skip writable-copy snapshots: "writable copy of #<id>"
+		if [[ "$desc" =~ ^writable[[:space:]]+copy[[:space:]]+of[[:space:]]+\#([0-9]+)$ ]]; then
+			return 0
+		fi
+	fi
+
+	local skip="no"
+
+	# Skip sync if another sync process or watcher is already running
+	if [[ "$op" == "add" || "$op" == "delete" ]]; then
+		# Systemd: limine-snapper-sync.service already active?
+		if command -v systemctl &>/dev/null && systemctl is-active --quiet limine-snapper-sync.service; then
+			skip="yes"
+		fi
+		# Non-systemd: watcher script running?
+		if command -v pgrep &>/dev/null && pgrep -f "limine-snapper-watcher" &>/dev/null; then
+			skip="yes"
+		fi
+	fi
+
+	# Run limine-snapper-sync asynchronously
+	if [[ $skip == "no" ]]; then
+
+		cmd=("${SYNC_CMD[@]}")
+		if [[ "$op" == "delete" || "$op" == "modify" ]]; then
+			cmd+=(--debounce)
+		elif [[ "$op" == "add" ]]; then
+			cmd+=(--add "$id")
+		fi
+
+		# Running async would help avoid snapper deadlocks when snapper and limine-snapper-sync v1 access snapper at the same time.
+		# Info: limine-snapper-sync major v2 already avoids this issue without using any snapper CLI.
+		if command -v systemd-run &>/dev/null; then
+			systemd-run \
+				--unit="limine-snapper-${op}-${SNAP_ID}-$$" \
+				--description="Run limine-snapper-sync for ${op} ${SNAP_ID}" \
+				--quiet --collect \
+				"${cmd[@]}"
+		elif command -v setsid &>/dev/null; then
+			# Run detached from terminal/session
+			setsid "${cmd[@]}" &>/dev/null &
+		else
+			# Fallback background execution
+			"${cmd[@]}" &>/dev/null &
+		fi
+	fi
+}
+
+restore_kernels() {
+	local new_id="$1"
+
+	if [[ -z "$new_id" ]]; then
+		log_error "missing snapshot ID"
+		return 1
+	fi
+
+	local xml="/.snapshots/${new_id}/info.xml"
+	if [[ ! -f "$xml" ]]; then
+		log_error "metadata file not found: ${xml}"
+		return 1
+	fi
+
+	local desc old_id
+	desc=$(get_description "$xml")
+
+	# Match pattern: "writable copy of #<old_id>"
+	if [[ "$desc" =~ ^writable[[:space:]]+copy[[:space:]]+of[[:space:]]+\#([0-9]+)$ ]]; then
+		old_id="${BASH_REMATCH[1]}"
+	else
+		# Fallback: use new_id
+		old_id="${new_id}"
+	fi
+
+	limine-snapper-restore --kernels "$old_id"
+}
+
+case "$ACTION" in
+create-snapshot-post)
+	run_sync add "${SNAP_ID}"
+	;;
+delete-snapshot-post)
+	run_sync delete "${SNAP_ID}"
+	;;
+modify-snapshot-post)
+	run_sync modify "${SNAP_ID}"
+	;;
+set-default-snapshot-pre)
+	restore_kernels "${SNAP_ID}"
+	;;
+*)
+	# Ignore any unknown action
+	exit 0
+	;;
+esac

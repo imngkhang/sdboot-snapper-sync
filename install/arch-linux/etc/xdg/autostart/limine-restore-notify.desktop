@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Limine-snapper-restore notification
+Name[ru]=Уведомление Limine-snapper-restore
+Comment=Prompts for restoration after booting into the snapshot.
+Comment[ru]=Предлагает восстановить систему после загрузки со снимка
+Icon=LimineSnapperSync
+Exec=limine-snapper-restore --notify
+Terminal=false
+Type=Application
+Categories=Utility

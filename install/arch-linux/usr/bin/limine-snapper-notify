@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+
+# Messages go through the gettext catalog of the current language.
+# Without an installed catalog every $"..." string stays exactly as written here.
+export TEXTDOMAIN="limine-snapper-sync"
+export TEXTDOMAINDIR="/usr/share/locale"
+
+readonly SCRIPT_NAME="limine-snapper-notify"
+readonly TITLE=""
+readonly LOG_LEVEL=3
+
+# Load configuration
+load_config() {
+	local config_files=(
+		/etc/limine-snapper-sync.conf
+		/etc/default/limine
+		/tmp/limine-snapper-sync.conf
+	)
+	local file key val
+	for file in "${config_files[@]}"; do
+		[[ -f "$file" ]] || continue
+		while IFS='=' read -r key val || [[ -n "$key" ]]; do
+			# Skip blank lines or lines starting with #
+			[[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+			key="${key//[[:space:]]/}"
+			case "$key" in
+			ENABLE_NOTIFICATION | NOTIFICATION_ICON)
+				val="${val#"${val%%[![:space:]]*}"}"
+				val="${val%"${val##*[![:space:]]}"}"
+				val="${val%\"}"
+				val="${val#\"}"
+				printf -v "$key" '%s' "$val"
+				;;
+			esac
+		done <"$file"
+	done
+
+	# Set defaults if not already defined
+	ENABLE_NOTIFICATION="${ENABLE_NOTIFICATION:-yes}"
+	NOTIFICATION_ICON="${NOTIFICATION_ICON:-/usr/share/icons/hicolor/128x128/apps/LimineSnapperSync.png}"
+}
+
+# Notify using notify-send
+notify_user() {
+	local msg="$1" action=""
+	if command -v notify-send &>/dev/null; then
+		action=$(notify-send -u critical --app-name="$SCRIPT_NAME" \
+			--icon="$NOTIFICATION_ICON" \
+			--action="disableAction=Disable" \
+			--action="closeAction=Close" \
+			"$TITLE" "$msg" -t 0)
+	else
+		echo $"notify-send not available; exiting."
+		logger -t "$SCRIPT_NAME" -p info "notify-send not available; exiting."
+		exit 0
+	fi
+	echo "$action"
+}
+
+# Watch the system journal for limine-snapper messages and send desktop notifications for new or important events.
+watch_limine_snapper_journal() {
+	local line message action now
+	local last_notify_time=0
+	local pause_time=5
+
+	while IFS= read -r line; do
+		# Only process lines containing "limine-snapper"
+		[[ "$line" != *limine-snapper* ]] && continue
+
+		# Extract message after the first colon
+		message="${line#*: }"
+
+		now=$(date +%s)
+
+		# Pause notifications briefly after a notification was shown
+		if ((now - last_notify_time < pause_time)); then
+			continue
+		fi
+
+		# Reload config if changed
+		load_config
+
+		[[ "${ENABLE_NOTIFICATION}" != yes ]] && {
+			continue
+		}
+
+		# Notify user
+		action="$(notify_user "$message")"
+
+		case "$action" in
+		closeAction | default) ;;
+		disableAction)
+			break
+			;;
+		esac
+
+		# Store last notification state
+		last_notify_time=$(date +%s)
+
+	done < <(journalctl --output=short-iso -b -p "$LOG_LEVEL" -n0 -f)
+}
+
+# Main logic
+if [[ "$EUID" -eq 0 ]]; then
+	root_warning=$"$SCRIPT_NAME should not run as root."
+	echo -e "\033[91m${root_warning}\033[0m" >&2
+	exit 1
+fi
+
+if ! command -v journalctl &>/dev/null; then
+	echo -e $"journalctl is not installed." >&2
+	exit 0
+fi
+
+load_config
+watch_limine_snapper_journal
